@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Earth Question</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            background: #000;
+            color: white;
+        }
+
+        #container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+        }
+
+        .question-container {
+            background: rgba(0, 0, 0, 0.8);
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            max-width: 600px;
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            pointer-events: all;
+            transition: all 0.5s ease;
+        }
+
+        .question-title {
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            background: linear-gradient(45deg, #00ff88, #00aaff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .question-text {
+            font-size: 1.4em;
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+
+        .button-container {
+            display: flex;
+            gap: 30px;
+            justify-content: center;
+        }
+
+        .choice-button {
+            padding: 15px 40px;
+            font-size: 1.2em;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .yes-button {
+            background: linear-gradient(45deg, #00ff88, #00cc66);
+            color: white;
+        }
+
+        .yes-button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 30px rgba(0, 255, 136, 0.5);
+        }
+
+        .no-button {
+            background: linear-gradient(45deg, #ff4444, #cc0000);
+            color: white;
+        }
+
+        .no-button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 30px rgba(255, 68, 68, 0.5);
+        }
+
+        .hidden {
+            opacity: 0;
+            pointer-events: none;
+            transform: scale(0.8);
+        }
+
+        .reset-button {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            color: white;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1em;
+            z-index: 200;
+            transition: all 0.3s ease;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .reset-button.visible {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .reset-button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateX(-50%) scale(1.05);
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="ui-overlay">
+            <div class="question-container" id="questionContainer">
+                <h1 class="question-title">A Question for Arya</h1>
+                <p class="question-text">Do you love me?</p>
+                <div class="button-container">
+                    <button class="choice-button yes-button" id="yesButton">Yes</button>
+                    <button class="choice-button no-button" id="noButton">No</button>
+                </div>
+            </div>
+            <button class="reset-button" id="resetButton">Ask Again</button>
+        </div>
+    </div>
+
+    <script>
+        let scene, camera, renderer, earth, earthGroup;
+        let animationId;
+        let fireworks = [];
+        let explosions = [];
+        let rockets = [];
+        let alienShip = null;
+        let heart = null;
+        let isAnimating = false;
+
+        // Initialize Three.js scene
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0x000011);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.getElementById('container').appendChild(renderer.domElement);
+
+            // Create Earth group for rotation
+            earthGroup = new THREE.Group();
+            scene.add(earthGroup);
+
+            // Create realistic Earth with continents
+            createEarth();
+            
+            // Add lighting
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.4);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+            directionalLight.position.set(5, 5, 5);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+
+            // Add stars
+            createStars();
+
+            camera.position.z = 6;
+
+            // Start animation loop
+            animate();
+
+            // Event listeners
+            document.getElementById('yesButton').addEventListener('click', handleYes);
+            document.getElementById('noButton').addEventListener('click', handleNo);
+            document.getElementById('resetButton').addEventListener('click', resetScene);
+        }
+
+        function createEarth() {
+            const earthGeometry = new THREE.SphereGeometry(2, 64, 64);
+            
+            // Create earth material with continent-like patterns
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024;
+            canvas.height = 512;
+            const context = canvas.getContext('2d');
+            
+            // Ocean blue background
+            context.fillStyle = '#1e3a8a';
+            context.fillRect(0, 0, 1024, 512);
+            
+            // Create continent-like shapes
+            context.fillStyle = '#22c55e';
+            
+            // North America-like shape
+            context.beginPath();
+            context.ellipse(200, 200, 80, 120, 0, 0, 2 * Math.PI);
+            context.fill();
+            
+            // Europe/Africa-like shape
+            context.beginPath();
+            context.ellipse(500, 180, 60, 140, 0, 0, 2 * Math.PI);
+            context.fill();
+            
+            // Asia-like shape
+            context.beginPath();
+            context.ellipse(700, 150, 120, 80, 0, 0, 2 * Math.PI);
+            context.fill();
+            
+            // Australia-like shape
+            context.beginPath();
+            context.ellipse(750, 350, 40, 30, 0, 0, 2 * Math.PI);
+            context.fill();
+            
+            // South America-like shape
+            context.beginPath();
+            context.ellipse(280, 350, 40, 80, 0, 0, 2 * Math.PI);
+            context.fill();
+            
+            // Add some smaller islands
+            for (let i = 0; i < 20; i++) {
+                context.beginPath();
+                context.ellipse(
+                    Math.random() * 1024, 
+                    Math.random() * 512, 
+                    Math.random() * 20 + 5, 
+                    Math.random() * 15 + 5, 
+                    0, 0, 2 * Math.PI
+                );
+                context.fill();
+            }
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            
+            const earthMaterial = new THREE.MeshLambertMaterial({ 
+                map: texture
+            });
+            
+            earth = new THREE.Mesh(earthGeometry, earthMaterial);
+            earth.castShadow = true;
+            earth.receiveShadow = true;
+            earthGroup.add(earth);
+        }
+
+        function createStars() {
+            const starGeometry = new THREE.BufferGeometry();
+            const starCount = 300;
+            const positions = new Float32Array(starCount * 3);
+
+            for (let i = 0; i < starCount * 3; i++) {
+                positions[i] = (Math.random() - 0.5) * 100;
+            }
+
+            starGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const starMaterial = new THREE.PointsMaterial({ 
+                color: 0xffffff, 
+                size: 0.8,
+                transparent: true,
+                opacity: 0.4
+            });
+            const stars = new THREE.Points(starGeometry, starMaterial);
+            scene.add(stars);
+        }
+
+        function animate() {
+            animationId = requestAnimationFrame(animate);
+
+            // Rotate Earth
+            if (earthGroup) {
+                earthGroup.rotation.y += 0.005;
+            }
+
+            // Update effects
+            updateFireworks();
+            updateExplosions();
+            updateRockets();
+            updateAlienShip();
+            updateHeart();
+            updateEarthFragments();
+
+            renderer.render(scene, camera);
+        }
+
+        function handleYes() {
+            if (isAnimating) return;
+            isAnimating = true;
+            
+            document.getElementById('questionContainer').classList.add('hidden');
+            
+            setTimeout(() => {
+                createAlienVisit();
+                createFireworks();
+                
+                setTimeout(() => {
+                    document.getElementById('resetButton').classList.add('visible');
+                    isAnimating = false;
+                }, 8000);
+            }, 1000);
+        }
+
+        function handleNo() {
+            if (isAnimating) return;
+            isAnimating = true;
+            
+            document.getElementById('questionContainer').classList.add('hidden');
+            
+            setTimeout(() => {
+                createDestruction();
+                
+                setTimeout(() => {
+                    document.getElementById('resetButton').classList.add('visible');
+                    isAnimating = false;
+                }, 6000);
+            }, 1000);
+        }
+
+        function createAlienVisit() {
+            console.log("Starting alien visit creation");
+            
+            // Create multiple alien ships from different angles
+            createAlienShip(1, 6, 0, 3, -3, 0, 2.5);     // Ship 1: from right
+            createAlienShip(2, -6, 0, 3, 3, 0, 2.5);     // Ship 2: from left  
+            createAlienShip(3, 0, 6, 3, 0, -3, 2.5);     // Ship 3: from top
+            
+            // Create celebration effects
+            setTimeout(() => createRainbowParticles(), 1000);
+            setTimeout(() => createFloatingHearts(), 2000);
+            setTimeout(() => createColorfulExplosions(), 1500);
+        }
+        
+        let alienShips = [];
+        
+        function createAlienShip(id, startX, startY, startZ, endX, endY, endZ) {
+            const shipGroup = new THREE.Group();
+            
+            // Main body (disc) - bright colors for each ship
+            const bodyGeometry = new THREE.CylinderGeometry(0.6, 0.4, 0.2, 16);
+            const colors = [0xffffff, 0xff69b4, 0x00ffff]; // White, hot pink, cyan
+            const bodyMaterial = new THREE.MeshBasicMaterial({ 
+                color: colors[id - 1]
+            });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            shipGroup.add(body);
+            
+            // Dome - rainbow colors
+            const domeGeometry = new THREE.SphereGeometry(0.3, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+            const domeColors = [0x00ffff, 0xffff00, 0xff00ff]; // Cyan, yellow, magenta
+            const domeMaterial = new THREE.MeshBasicMaterial({ 
+                color: domeColors[id - 1],
+                transparent: true,
+                opacity: 0.8
+            });
+            const dome = new THREE.Mesh(domeGeometry, domeMaterial);
+            dome.position.y = 0.1;
+            shipGroup.add(dome);
+            
+            // Bright rainbow lights
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * Math.PI * 2;
+                const lightGeometry = new THREE.SphereGeometry(0.08, 8, 8);
+                const lightColors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff];
+                const lightMaterial = new THREE.MeshBasicMaterial({ 
+                    color: lightColors[i]
+                });
+                const light = new THREE.Mesh(lightGeometry, lightMaterial);
+                light.position.x = Math.cos(angle) * 0.5;
+                light.position.z = Math.sin(angle) * 0.5;
+                light.position.y = -0.05;
+                shipGroup.add(light);
+            }
+            
+            const alienShip = shipGroup;
+            alienShip.position.set(startX, startY, startZ);
+            alienShip.scale.set(0.7, 0.7, 0.7);
+            alienShip.userData.id = id;
+            scene.add(alienShip);
+            alienShips.push(alienShip);
+            
+            // Animate ship approach
+            let animationTime = 0;
+            function updateShipAnimation() {
+                if (!alienShip || !alienShip.parent) return;
+                
+                animationTime += 0.025;
+                
+                if (animationTime <= 5) {
+                    // Approach phase
+                    const t = animationTime / 5;
+                    alienShip.position.x = startX + (endX - startX) * t;
+                    alienShip.position.y = startY + (endY - startY) * t;
+                    alienShip.position.z = startZ + (endZ - startZ) * t;
+                    alienShip.rotation.y = t * Math.PI * 3;
+                    
+                    // Unique bobbing for each ship
+                    alienShip.position.y += Math.sin(animationTime * 4 + id) * 0.3;
+                    
+                    // Rainbow light pulsing
+                    alienShip.children.forEach((child, index) => {
+                        if (index >= 2) { // Skip body and dome, animate lights
+                            const pulse = 0.5 + Math.sin(animationTime * 8 + index) * 0.3;
+                            child.material.opacity = pulse;
+                        }
+                    });
+                }
+                
+                // Trigger heart creation from first ship
+                if (id === 1 && animationTime >= 2.5 && !heart) {
+                    createHeart();
+                }
+                
+                if (animationTime >= 8) {
+                    // Departure phase
+                    const departT = (animationTime - 8) / 3;
+                    if (departT <= 1) {
+                        alienShip.position.x = endX + (startX * departT);
+                        alienShip.position.y = endY + (6 * departT);
+                        alienShip.position.z = endZ + (5 * departT);
+                        alienShip.rotation.y += 0.1;
+                    }
+                    
+                    if (animationTime >= 11) {
+                        scene.remove(alienShip);
+                        const index = alienShips.indexOf(alienShip);
+                        if (index > -1) alienShips.splice(index, 1);
+                        return;
+                    }
+                }
+                
+                requestAnimationFrame(updateShipAnimation);
+            }
+            
+            updateShipAnimation();
+        }
+
+        function createHeart() {
+            console.log("Creating heart with inflation animation");
+            
+            // Create a proper 3D heart shape - smaller
+            const heartShape = new THREE.Shape();
+            heartShape.moveTo(0, 0);
+            heartShape.bezierCurveTo(0, -0.3, -0.6, -0.3, -0.6, 0);
+            heartShape.bezierCurveTo(-0.6, 0.3, 0, 0.6, 0, 0.9);
+            heartShape.bezierCurveTo(0, 0.6, 0.6, 0.3, 0.6, 0);
+            heartShape.bezierCurveTo(0.6, -0.3, 0, -0.3, 0, 0);
+            
+            const heartGeometry = new THREE.ExtrudeGeometry(heartShape, {
+                depth: 0.2,
+                bevelEnabled: true,
+                bevelThickness: 0.03,
+                bevelSize: 0.03,
+                bevelSegments: 2
+            });
+            
+            const heartMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0xff1493,
+                transparent: true,
+                opacity: 0  // Start invisible
+            });
+            
+            heart = new THREE.Mesh(heartGeometry, heartMaterial);
+            // Position heart in front of Earth, not behind
+            heart.position.set(0.5, 0, 2.8);  // Slightly in front of Earth (z > 2)
+            heart.rotation.z = Math.PI;
+            heart.scale.set(0, 0, 0);  // Start at zero scale
+            scene.add(heart);
+            
+            console.log("Heart created at position:", heart.position);
+            
+            // Heart inflation animation with proper scaling
+            let heartTime = 0;
+            function animateHeart() {
+                if (!heart || !heart.parent) return;
+                
+                heartTime += 0.06;
+                
+                // Inflation phase - start from 0 and grow
+                if (heartTime < 2) {
+                    const scale = heartTime * 0.4;  // Grow to 0.8 scale (smaller than before)
+                    const opacity = heartTime * 0.5;  // Fade in
+                    heart.scale.set(scale, scale, scale);
+                    heart.material.opacity = Math.min(opacity, 1);
+                    heart.rotation.y += 0.02;
+                }
+                // Float and pulse phase
+                else if (heartTime < 6) {
+                    const baseScale = 0.8;
+                    const pulse = baseScale + Math.sin((heartTime - 2) * 6) * 0.1;
+                    heart.scale.set(pulse, pulse, pulse);
+                    heart.position.y = 0 + Math.sin((heartTime - 2) * 3) * 0.4;
+                    heart.rotation.y += 0.03;
+                    
+                    // Sparkle effects
+                    if (Math.random() < 0.2) {
+                        createHeartSparkle();
+                    }
+                }
+                // Deflation phase
+                else {
+                    const deflateT = (heartTime - 6) / 1.5;
+                    const scale = Math.max(0.8 - deflateT * 1, 0);
+                    heart.scale.set(scale, scale, scale);
+                    heart.material.opacity = Math.max(1 - deflateT, 0);
+                    
+                    if (scale <= 0) {
+                        console.log("Heart animation complete");
+                        scene.remove(heart);
+                        heart = null;
+                        return;
+                    }
+                }
+                
+                requestAnimationFrame(animateHeart);
+            }
+            
+            animateHeart();
+        }
+        
+        function createRainbowParticles() {
+            for (let i = 0; i < 50; i++) {
+                setTimeout(() => {
+                    const particle = new THREE.Mesh(
+                        new THREE.SphereGeometry(0.05, 8, 8),
+                        new THREE.MeshBasicMaterial({ 
+                            color: new THREE.Color().setHSL(Math.random(), 1, 0.6),
+                            transparent: true,
+                            opacity: 1
+                        })
+                    );
+                    
+                    particle.position.set(
+                        (Math.random() - 0.5) * 8,
+                        (Math.random() - 0.5) * 6,
+                        (Math.random() - 0.5) * 4
+                    );
+                    
+                    particle.userData.velocity = new THREE.Vector3(
+                        (Math.random() - 0.5) * 0.1,
+                        Math.random() * 0.15 + 0.05,
+                        (Math.random() - 0.5) * 0.1
+                    );
+                    
+                    particle.userData.life = 1.0;
+                    scene.add(particle);
+                    fireworks.push(particle);
+                }, i * 50);
+            }
+        }
+        
+        function createFloatingHearts() {
+            for (let i = 0; i < 15; i++) {
+                setTimeout(() => {
+                    const miniHeartGeometry = new THREE.SphereGeometry(0.1, 12, 12);
+                    const miniHeart = new THREE.Mesh(
+                        miniHeartGeometry,
+                        new THREE.MeshBasicMaterial({ 
+                            color: 0xff69b4,
+                            transparent: true,
+                            opacity: 0.8
+                        })
+                    );
+                    
+                    miniHeart.position.set(
+                        (Math.random() - 0.5) * 6,
+                        -4 + Math.random() * 2,
+                        (Math.random() - 0.5) * 4
+                    );
+                    
+                    miniHeart.userData.velocity = new THREE.Vector3(0, 0.08, 0);
+                    miniHeart.userData.life = 1.0;
+                    scene.add(miniHeart);
+                    fireworks.push(miniHeart);
+                }, i * 200);
+            }
+        }
+        
+        function createColorfulExplosions() {
+            for (let i = 0; i < 8; i++) {
+                setTimeout(() => {
+                    const explosion = new THREE.Group();
+                    
+                    // Create colorful burst particles
+                    for (let j = 0; j < 25; j++) {
+                        const particleGeometry = new THREE.SphereGeometry(0.04, 8, 8);
+                        const particleMaterial = new THREE.MeshBasicMaterial({ 
+                            color: new THREE.Color().setHSL(Math.random(), 0.8, 0.7),
+                            transparent: true,
+                            opacity: 1
+                        });
+                        const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+                        
+                        particle.userData.velocity = new THREE.Vector3(
+                            (Math.random() - 0.5) * 0.4,
+                            (Math.random() - 0.5) * 0.4,
+                            (Math.random() - 0.5) * 0.4
+                        );
+                        
+                        explosion.add(particle);
+                    }
+                    
+                    explosion.position.set(
+                        (Math.random() - 0.5) * 10,
+                        (Math.random() - 0.5) * 6,
+                        (Math.random() - 0.5) * 6
+                    );
+                    
+                    explosion.userData.life = 1.0;
+                    scene.add(explosion);
+                    fireworks.push(explosion);
+                }, i * 300);
+            }
+        }
+        
+        function createHeartSparkle() {
+            if (!heart) return;
+            
+            const sparkleGeometry = new THREE.SphereGeometry(0.05, 8, 8);
+            const sparkleMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffd700,
+                transparent: true,
+                opacity: 1
+            });
+            
+            const sparkle = new THREE.Mesh(sparkleGeometry, sparkleMaterial);
+            sparkle.position.copy(heart.position);
+            sparkle.position.add(new THREE.Vector3(
+                (Math.random() - 0.5) * 2,
+                (Math.random() - 0.5) * 2,
+                (Math.random() - 0.5) * 1
+            ));
+            
+            scene.add(sparkle);
+            
+            let sparkleTime = 0;
+            function animateSparkle() {
+                if (!sparkle.parent) return;
+                
+                sparkleTime += 0.05;
+                sparkle.material.opacity = Math.max(1 - sparkleTime, 0);
+                sparkle.scale.multiplyScalar(1.02);
+                
+                if (sparkle.material.opacity <= 0) {
+                    scene.remove(sparkle);
+                    return;
+                }
+                
+                requestAnimationFrame(animateSparkle);
+            }
+            animateSparkle();
+        }
+
+        function createDestruction() {
+            // First create explosion effects around earth
+            for (let wave = 0; wave < 3; wave++) {
+                setTimeout(() => {
+                    for (let i = 0; i < 15; i++) {
+                        const explosion = createExplosion();
+                        explosions.push(explosion);
+                    }
+                }, wave * 800);
+            }
+            
+            // Create rockets from different directions
+            for (let i = 0; i < 20; i++) {
+                setTimeout(() => {
+                    createRocket();
+                }, i * 200);
+            }
+            
+            // Final earth explosion after rockets hit
+            setTimeout(() => {
+                explodeEarth();
+            }, 4000);
+            
+            // Screen shake effect
+            let shakeTime = 0;
+            function shakeCamera() {
+                if (shakeTime < 6) {
+                    shakeTime += 0.016;
+                    camera.position.x = Math.sin(shakeTime * 50) * 0.15;
+                    camera.position.y = Math.cos(shakeTime * 40) * 0.15;
+                    requestAnimationFrame(shakeCamera);
+                } else {
+                    camera.position.x = 0;
+                    camera.position.y = 0;
+                }
+            }
+            shakeCamera();
+        }
+        
+        let earthFragments = [];
+        
+        function explodeEarth() {
+            if (!earth) return;
+            
+            console.log("Exploding Earth into fragments");
+            
+            // Hide the original earth
+            earth.visible = false;
+            
+            // Create earth fragments
+            const fragmentCount = 25;
+            for (let i = 0; i < fragmentCount; i++) {
+                const fragmentGeometry = new THREE.SphereGeometry(
+                    0.1 + Math.random() * 0.3, 
+                    8, 8
+                );
+                
+                const fragmentMaterial = earth.material.clone();
+                const fragment = new THREE.Mesh(fragmentGeometry, fragmentMaterial);
+                
+                // Position fragments around earth's center
+                const phi = Math.random() * Math.PI * 2;
+                const theta = Math.random() * Math.PI;
+                const radius = 2 + Math.random() * 0.5;
+                
+                fragment.position.set(
+                    radius * Math.sin(theta) * Math.cos(phi),
+                    radius * Math.sin(theta) * Math.sin(phi),
+                    radius * Math.cos(theta)
+                );
+                
+                // Give each fragment velocity away from center
+                fragment.userData.velocity = fragment.position.clone().normalize().multiplyScalar(0.02 + Math.random() * 0.03);
+                fragment.userData.angularVelocity = new THREE.Vector3(
+                    (Math.random() - 0.5) * 0.1,
+                    (Math.random() - 0.5) * 0.1,
+                    (Math.random() - 0.5) * 0.1
+                );
+                
+                earthGroup.add(fragment);
+                earthFragments.push(fragment);
+            }
+            
+            // Create a massive explosion at earth's center
+            const centralExplosion = new THREE.Group();
+            
+            for (let i = 0; i < 30; i++) {
+                const explosionGeometry = new THREE.SphereGeometry(0.1 + Math.random() * 0.2, 12, 12);
+                const explosionMaterial = new THREE.MeshBasicMaterial({ 
+                    color: new THREE.Color().setHSL(0.08, 1, 0.5 + Math.random() * 0.3),
+                    transparent: true,
+                    opacity: 0.8
+                });
+                
+                const explosionSphere = new THREE.Mesh(explosionGeometry, explosionMaterial);
+                explosionSphere.position.set(
+                    (Math.random() - 0.5) * 1,
+                    (Math.random() - 0.5) * 1,
+                    (Math.random() - 0.5) * 1
+                );
+                
+                centralExplosion.add(explosionSphere);
+            }
+            
+            centralExplosion.userData.scale = 0.1;
+            centralExplosion.userData.life = 1.0;
+            scene.add(centralExplosion);
+            explosions.push(centralExplosion);
+        }
+        
+        function updateEarthFragments() {
+            earthFragments.forEach((fragment, index) => {
+                if (!fragment.parent) return;
+                
+                // Apply velocity
+                fragment.position.add(fragment.userData.velocity);
+                
+                // Apply angular velocity
+                fragment.rotation.x += fragment.userData.angularVelocity.x;
+                fragment.rotation.y += fragment.userData.angularVelocity.y;
+                fragment.rotation.z += fragment.userData.angularVelocity.z;
+                
+                // Fade out over time
+                fragment.material.opacity -= 0.002;
+                
+                // Remove when too faded or too far
+                if (fragment.material.opacity <= 0 || fragment.position.length() > 50) {
+                    earthGroup.remove(fragment);
+                    earthFragments.splice(index, 1);
+                }
+            });
+        }
+
+        function createExplosion() {
+            const explosion = new THREE.Group();
+            
+            // Main explosion sphere
+            const explosionGeometry = new THREE.SphereGeometry(0.1, 16, 16);
+            const explosionMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0xff4400,
+                transparent: true,
+                opacity: 1
+            });
+            
+            const explosionMesh = new THREE.Mesh(explosionGeometry, explosionMaterial);
+            explosion.add(explosionMesh);
+            
+            // Add particle effects
+            for (let i = 0; i < 10; i++) {
+                const particleGeometry = new THREE.SphereGeometry(0.02, 8, 8);
+                const particleMaterial = new THREE.MeshBasicMaterial({ 
+                    color: Math.random() > 0.5 ? 0xff4400 : 0xff8800
+                });
+                const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+                
+                particle.position.set(
+                    (Math.random() - 0.5) * 0.2,
+                    (Math.random() - 0.5) * 0.2,
+                    (Math.random() - 0.5) * 0.2
+                );
+                
+                particle.userData.velocity = new THREE.Vector3(
+                    (Math.random() - 0.5) * 0.2,
+                    (Math.random() - 0.5) * 0.2,
+                    (Math.random() - 0.5) * 0.2
+                );
+                
+                explosion.add(particle);
+            }
+            
+            explosion.position.set(
+                (Math.random() - 0.5) * 6,
+                (Math.random() - 0.5) * 6,
+                (Math.random() - 0.5) * 4
+            );
+            
+            explosion.userData.scale = 0.1;
+            explosion.userData.life = 1.0;
+            
+            scene.add(explosion);
+            return explosion;
+        }
+
+        function createRocket() {
+            const rocket = new THREE.Group();
+            
+            // Rocket body
+            const bodyGeometry = new THREE.CylinderGeometry(0.05, 0.08, 0.6, 8);
+            const bodyMaterial = new THREE.MeshLambertMaterial({ color: 0x666666 });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            rocket.add(body);
+            
+            // Rocket nose
+            const noseGeometry = new THREE.ConeGeometry(0.05, 0.2, 8);
+            const noseMaterial = new THREE.MeshLambertMaterial({ color: 0x444444 });
+            const nose = new THREE.Mesh(noseGeometry, noseMaterial);
+            nose.position.y = 0.4;
+            rocket.add(nose);
+            
+            // Flame trail
+            const flameGeometry = new THREE.ConeGeometry(0.08, 0.3, 8);
+            const flameMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0xff4400,
+                transparent: true,
+                opacity: 0.8
+            });
+            const flame = new THREE.Mesh(flameGeometry, flameMaterial);
+            flame.position.y = -0.45;
+            rocket.add(flame);
+            
+            // Position rocket outside screen
+            const angle = Math.random() * Math.PI * 2;
+            const distance = 20;
+            rocket.position.set(
+                Math.cos(angle) * distance,
+                (Math.random() - 0.5) * 10,
+                Math.sin(angle) * distance
+            );
+            
+            // Point rocket toward earth
+            const direction = new THREE.Vector3(0, 0, 0).sub(rocket.position).normalize();
+            rocket.userData.velocity = direction.multiplyScalar(0.15);
+            rocket.lookAt(0, 0, 0);
+            
+            scene.add(rocket);
+            rockets.push(rocket);
+        }
+
+        function showLoveMessage() {
+    const overlay = document.getElementById('ui-overlay');
+    const msg = document.createElement('div');
+    msg.className = 'love-message';
+    msg.innerText = "I ❤️ You";
+
+    // Random horizontal offset
+    msg.style.left = `${50 + (Math.random() * 40 - 20)}%`;
+    msg.style.top = `${60 + Math.random() * 10}%`;
+
+    overlay.appendChild(msg);
+
+    setTimeout(() => overlay.removeChild(msg), 3000);
+}
+
+
+        function createFireworks() {
+            for (let i = 0; i < 30; i++) {
+                setTimeout(() => {
+                    const firework = new THREE.Group();
+                    
+                    // Create burst of colorful particles
+                    for (let j = 0; j < 20; j++) {
+                        const particleGeometry = new THREE.SphereGeometry(0.03, 8, 8);
+                        const particleMaterial = new THREE.MeshBasicMaterial({ 
+                            color: new THREE.Color().setHSL(Math.random(), 0.8, 0.6),
+                            transparent: true,
+                            opacity: 1
+                        });
+                        const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+                        
+                        particle.userData.velocity = new THREE.Vector3(
+                            (Math.random() - 0.5) * 0.3,
+                            (Math.random() - 0.5) * 0.3,
+                            (Math.random() - 0.5) * 0.3
+                        );
+                        
+                        firework.add(particle);
+                    }
+                    
+                    firework.position.set(
+                        (Math.random() - 0.5) * 12,
+                        (Math.random() - 0.5) * 8,
+                        (Math.random() - 0.5) * 8
+                    );
+                    
+                    firework.userData.life = 1.0;
+                    scene.add(firework);
+                    fireworks.push(firework);
+                }, i * 150);
+            }
+        }
+
+        function updateFireworks() {
+            for (let i = fireworks.length - 1; i >= 0; i--) {
+                const firework = fireworks[i];
+                
+                if (firework.userData && firework.userData.life !== undefined) {
+                    firework.userData.life -= 0.012;
+                    
+                    // Handle different types of particles
+                    if (firework.children && firework.children.length > 0) {
+                        // Group of particles (explosion)
+                        firework.children.forEach(particle => {
+                            if (particle.userData.velocity) {
+                                particle.position.add(particle.userData.velocity);
+                                particle.userData.velocity.multiplyScalar(0.98); // Air resistance
+                                particle.userData.velocity.y -= 0.003; // Gravity
+                            }
+                            particle.material.opacity = firework.userData.life;
+                        });
+                    } else if (firework.userData.velocity) {
+                        // Single particle
+                        firework.position.add(firework.userData.velocity);
+                        firework.userData.velocity.multiplyScalar(0.98);
+                        firework.userData.velocity.y -= 0.005;
+                        firework.material.opacity = firework.userData.life;
+                        
+                        // Rotate hearts
+                        if (firework.geometry.type === 'SphereGeometry' && firework.material.color.getHex() === 0xff69b4) {
+                            firework.rotation.y += 0.05;
+                        }
+                    }
+                    
+                    if (firework.userData.life <= 0) {
+                        scene.remove(firework);
+                        fireworks.splice(i, 1);
+                    }
+                } else {
+                    // Legacy firework handling
+                    if (firework.children && firework.children.length > 0) {
+                        firework.children.forEach(particle => {
+                            if (particle.userData.velocity) {
+                                particle.position.add(particle.userData.velocity);
+                                particle.userData.velocity.multiplyScalar(0.98);
+                                particle.userData.velocity.y -= 0.005;
+                            }
+                        });
+                    }
+                    
+                    // Remove after time
+                    if (Math.random() < 0.02) {
+                        scene.remove(firework);
+                        fireworks.splice(i, 1);
+                    }
+                }
+            }
+        }
+
+        function updateExplosions() {
+            for (let i = explosions.length - 1; i >= 0; i--) {
+                const explosion = explosions[i];
+                explosion.userData.scale += 0.05;
+                explosion.userData.life -= 0.02;
+                
+                explosion.scale.set(
+                    explosion.userData.scale,
+                    explosion.userData.scale,
+                    explosion.userData.scale
+                );
+                
+                explosion.children.forEach(child => {
+                    if (child.userData.velocity) {
+                        child.position.add(child.userData.velocity);
+                    }
+                    child.material.opacity = explosion.userData.life;
+                });
+                
+                if (explosion.userData.life <= 0) {
+                    scene.remove(explosion);
+                    explosions.splice(i, 1);
+                }
+            }
+        }
+
+        function updateRockets() {
+            for (let i = rockets.length - 1; i >= 0; i--) {
+                const rocket = rockets[i];
+                rocket.position.add(rocket.userData.velocity);
+                
+                // Animate flame
+                const flame = rocket.children[2];
+                if (flame) {
+                    flame.scale.y = 0.8 + Math.sin(Date.now() * 0.01) * 0.4;
+                }
+                
+                // Remove if hit earth or went too far
+                if (rocket.position.distanceTo(new THREE.Vector3(0, 0, 0)) < 2.5) {
+                    // Create explosion on impact
+                    const impactExplosion = createExplosion();
+                    impactExplosion.position.copy(rocket.position);
+                    explosions.push(impactExplosion);
+                    
+                    scene.remove(rocket);
+                    rockets.splice(i, 1);
+                } else if (rocket.position.distanceTo(new THREE.Vector3(0, 0, 0)) > 50) {
+                    scene.remove(rocket);
+                    rockets.splice(i, 1);
+                }
+            }
+        }
+
+        function updateAlienShip() {
+            // Update all alien ships
+            alienShips.forEach(ship => {
+                if (ship && ship.parent) {
+                    // Add pulsing glow effect to lights
+                    ship.children.forEach((child, index) => {
+                        if (index >= 2) { // Skip body and dome, animate lights
+                            const intensity = 0.6 + Math.sin(Date.now() * 0.01 + index) * 0.4;
+                            child.material.opacity = intensity;
+                            
+                            // Scale pulsing
+                            const scale = 1 + Math.sin(Date.now() * 0.008 + index) * 0.2;
+                            child.scale.set(scale, scale, scale);
+                        }
+                    });
+                }
+            });
+        }
+
+        function updateHeart() {
+            // Heart updates are handled in its own animation function
+        }
+
+        function resetScene() {
+            // Clear all effects
+            fireworks.forEach(f => scene.remove(f));
+            explosions.forEach(e => scene.remove(e));
+            rockets.forEach(r => scene.remove(r));
+            earthFragments.forEach(f => earthGroup.remove(f));
+            alienShips.forEach(ship => scene.remove(ship));
+            if (heart) scene.remove(heart);
+            
+            fireworks = [];
+            explosions = [];
+            rockets = [];
+            earthFragments = [];
+            alienShips = [];
+            heart = null;
+            isAnimating = false;
+            
+            // Restore earth
+            if (earth) {
+                earth.visible = true;
+                earth.material.opacity = 1;
+            }
+            
+            // Reset camera
+            camera.position.set(0, 0, 6);
+            
+            // Show question again
+            document.getElementById('questionContainer').classList.remove('hidden');
+            document.getElementById('resetButton').classList.remove('visible');
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Initialize the scene
+        init();
+    </script>
+</body>
+</html>
