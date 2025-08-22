@@ -153,6 +153,8 @@
             <button class="reset-button" id="resetButton">Ask Again</button>
         </div>
     </div>
+    <audio id="yesAudio" src="yesAudio.mp3" preload="auto"></audio>
+    <audio id="noAudio" src="noAudio.mp3" preload="auto"></audio>
 
     <script>
         let scene, camera, renderer, earth, earthGroup;
@@ -313,6 +315,8 @@
         function handleYes() {
             if (isAnimating) return;
             isAnimating = true;
+            document.getElementById("yesAudio").volume = 0.5;
+            document.getElementById("yesAudio").play();
             
             document.getElementById('questionContainer').classList.add('hidden');
             
@@ -330,6 +334,8 @@
         function handleNo() {
             if (isAnimating) return;
             isAnimating = true;
+            document.getElementById("noAudio").volume = 0.5;
+            document.getElementById("noAudio").play();
             
             document.getElementById('questionContainer').classList.add('hidden');
             
@@ -1091,6 +1097,15 @@
         }
 
         function resetScene() {
+            const yesAudio = document.getElementById("yesAudio");
+            const noAudio = document.getElementById("noAudio");
+        
+            [yesAudio, noAudio].forEach(audio => {
+                if (audio) {
+                    audio.pause();
+                    audio.currentTime = 0; // rewind to start
+                }
+            });
             // Clear all effects
             fireworks.forEach(f => scene.remove(f));
             explosions.forEach(e => scene.remove(e));
