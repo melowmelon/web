@@ -449,11 +449,10 @@
             currentMode = 'yes';
             
             // Only play audio if user confirmed they have it on
-            if (audioEnabled) {
-                const yesAudio = document.getElementById("yesAudio");
-                yesAudio.volume = 0.5;
-                yesAudio.play().catch(e => console.log("Audio play failed:", e));
-            }
+            const yesAudio = document.getElementById("yesAudio");
+            yesAudio.volume = 0.5;
+            yesAudio.play().catch(e => console.log("Audio play failed:", e));
+            
             
             document.getElementById('loveQuestionContainer').classList.add('hidden');
             
@@ -476,12 +475,10 @@
             isAnimating = true;
             currentMode = 'no';
             
-            // Only play audio if user confirmed they have it on
-            if (audioEnabled) {
-                const noAudio = document.getElementById("noAudio");
-                noAudio.volume = 0.5;
-                noAudio.play().catch(e => console.log("Audio play failed:", e));
-            }
+            const noAudio = document.getElementById("noAudio");
+            noAudio.volume = 0.5;
+            noAudio.play().catch(e => console.log("Audio play failed:", e));
+
             
             document.getElementById('loveQuestionContainer').classList.add('hidden');
             
@@ -1151,7 +1148,7 @@
                     const firework = new THREE.Group();
                     
                     // Create burst of colorful particles
-                    for (let j = 0; j < 20; j++) {
+                    for (let j = 0; j < 60; j++) {
                         const particleGeometry = new THREE.SphereGeometry(0.03, 8, 8);
                         const particleMaterial = new THREE.MeshBasicMaterial({ 
                             color: new THREE.Color().setHSL(Math.random(), 0.8, 0.6),
