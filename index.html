@@ -105,9 +105,7 @@
         }
 
         .hidden {
-            opacity: 0;
-            pointer-events: none;
-            transform: scale(0.8);
+            display: none;
         }
 
         .reset-button {
@@ -161,12 +159,29 @@
 <body>
     <div id="container">
         <div id="ui-overlay">
-            <div class="question-container" id="questionContainer">
+            <div class="question-container" id="audioQuestion">
+                <h1 class="question-title">Check Audio</h1>
+                <p class="question-text">Do you have audio on?</p>
+                <div class="button-container">
+                    <button class="choice-button yes-button" id="audioYes">Yes</button>
+                    <button class="choice-button no-button" id="audioNo">No</button>
+                </div>
+            </div>
+
+            <div class="question-container hidden" id="questionContainer">
                 <h1 class="question-title">A Question for Arya</h1>
                 <p class="question-text">Do you love me?</p>
                 <div class="button-container">
                     <button class="choice-button yes-button" id="yesButton">Yes</button>
                     <button class="choice-button no-button" id="noButton">No</button>
+                </div>
+            </div>
+
+            <div class="question-container hidden" id="audioOffQuestion">
+                <h1 class="question-title">Sound Needed</h1>
+                <p class="question-text">Turn the FUCKING audio on</p>
+                <div class="button-container">
+                    <button class="choice-button yes-button" id="retryYes">OK</button>
                 </div>
             </div>
             <button class="reset-button" id="resetButton">Ask Again</button>
@@ -223,7 +238,28 @@
             // Start animation loop
             animate();
 
-            // Event listeners
+            // Audio question handlers
+            document.getElementById('audioYes').addEventListener('click', () => {
+                document.getElementById('audioQuestion').classList.add('hidden');
+                document.getElementById('questionContainer').classList.remove('hidden');
+            });
+        
+            document.getElementById('audioNo').addEventListener('click', () => {
+                document.getElementById('audioQuestion').classList.add('hidden');
+                document.getElementById('audioOffQuestion').classList.remove('hidden');
+            });
+        
+            // Retry question handlers
+            document.getElementById('retryYes').addEventListener('click', () => {
+                document.getElementById('audioOffQuestion').classList.add('hidden');
+                document.getElementById('questionContainer').classList.remove('hidden');
+            });
+        
+            document.getElementById('retryNo').addEventListener('click', () => {
+                alert("Okay, turn audio on and refresh when ready!");
+            });
+
+            // Main question handlers
             document.getElementById('yesButton').addEventListener('click', handleYes);
             document.getElementById('noButton').addEventListener('click', handleNo);
             document.getElementById('resetButton').addEventListener('click', resetScene);
@@ -1281,7 +1317,9 @@
             camera.position.set(0, 0, 6);
             
             // Show question again
-            document.getElementById('questionContainer').classList.remove('hidden');
+            document.getElementById('audioQuestion').classList.remove('hidden');
+            document.getElementById('questionContainer').classList.add('hidden');
+            document.getElementById('audioOffQuestion').classList.add('hidden');
             document.getElementById('resetButton').classList.remove('visible');
         }
 
