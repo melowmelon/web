@@ -39,12 +39,21 @@
             pointer-events: none;
         }
 
+        #ui-overlay > .question-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            margin: 0;
+        }
+
         .question-container {
             background: rgba(0, 0, 0, 0.8);
             padding: 40px;
             border-radius: 20px;
             text-align: center;
             max-width: 600px;
+            width: 90%;
             backdrop-filter: blur(10px);
             border: 2px solid rgba(255, 255, 255, 0.2);
             pointer-events: all;
@@ -70,6 +79,8 @@
             display: flex;
             gap: 30px;
             justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
         }
 
         .choice-button {
@@ -104,8 +115,21 @@
             box-shadow: 0 0 30px rgba(255, 68, 68, 0.5);
         }
 
+        .ok-button {
+            background: linear-gradient(45deg, #00aaff, #0088cc);
+            color: white;
+            width: 200px;
+        }
+
+        .ok-button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 30px rgba(0, 170, 255, 0.5);
+        }
+
         .hidden {
-            display: none;
+            opacity: 0;
+            pointer-events: none;
+            transform: scale(0.8);
         }
 
         .reset-button {
@@ -154,21 +178,40 @@
             opacity: 0;
             transition: all 4s ease-out;
         }
+
+        .audio-warning {
+            font-size: 1.1em;
+            color: #ffaa00;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
     <div id="container">
         <div id="ui-overlay">
-            <div class="question-container" id="audioQuestion">
-                <h1 class="question-title">Check Audio</h1>
-                <p class="question-text">Do you have audio on?</p>
+            <!-- Audio Check Question -->
+            <div class="question-container" id="audioCheckContainer">
+                <h1 class="question-title">Audio Check</h1>
+                <p class="question-text">Do you have audio/sound on?</p>
                 <div class="button-container">
-                    <button class="choice-button yes-button" id="audioYes">Yes</button>
-                    <button class="choice-button no-button" id="audioNo">No</button>
+                    <button class="choice-button yes-button" id="audioYesButton">Yes</button>
+                    <button class="choice-button no-button" id="audioNoButton">No</button>
                 </div>
             </div>
 
-            <div class="question-container hidden" id="questionContainer">
+            <!-- Audio Warning -->
+            <div class="question-container hidden" id="audioWarningContainer">
+                <h1 class="question-title">Turn On Audio</h1>
+                <p class="audio-warning">⚠️ Please turn on your audio for the best experience!</p>
+                <p class="question-text">BRUH TURN THE FUCKING AUDIO ON</p>
+                <div class="button-container">
+                    <button class="choice-button ok-button" id="audioOkButton">OK</button>
+                </div>
+            </div>
+
+            <!-- Main Love Question -->
+            <div class="question-container hidden" id="loveQuestionContainer">
                 <h1 class="question-title">A Question for Arya</h1>
                 <p class="question-text">Do you love me?</p>
                 <div class="button-container">
@@ -177,13 +220,6 @@
                 </div>
             </div>
 
-            <div class="question-container hidden" id="audioOffQuestion">
-                <h1 class="question-title">Sound Needed</h1>
-                <p class="question-text">Bruh turn the FUCKING audio on</p>
-                <div class="button-container">
-                    <button class="choice-button yes-button" id="retryYes">OK</button>
-                </div>
-            </div>
             <button class="reset-button" id="resetButton">Ask Again</button>
         </div>
     </div>
@@ -202,6 +238,7 @@
         let currentMode = null; // 'yes' or 'no'
         let heartInterval = null;
         let emojiInterval = null;
+        let audioEnabled = false;
 
         // Initialize Three.js scene
         function init() {
@@ -238,31 +275,37 @@
             // Start animation loop
             animate();
 
-            // Audio question handlers
-            document.getElementById('audioYes').addEventListener('click', () => {
-                document.getElementById('audioQuestion').classList.add('hidden');
-                document.getElementById('questionContainer').classList.remove('hidden');
-            });
-        
-            document.getElementById('audioNo').addEventListener('click', () => {
-                document.getElementById('audioQuestion').classList.add('hidden');
-                document.getElementById('audioOffQuestion').classList.remove('hidden');
-            });
-        
-            // Retry question handlers
-            document.getElementById('retryYes').addEventListener('click', () => {
-                document.getElementById('audioOffQuestion').classList.add('hidden');
-                document.getElementById('questionContainer').classList.remove('hidden');
-            });
-        
-            document.getElementById('retryNo').addEventListener('click', () => {
-                alert("Okay, turn audio on and refresh when ready!");
-            });
-
-            // Main question handlers
+            // Event listeners
+            document.getElementById('audioYesButton').addEventListener('click', handleAudioYes);
+            document.getElementById('audioNoButton').addEventListener('click', handleAudioNo);
+            document.getElementById('audioOkButton').addEventListener('click', handleAudioOk);
             document.getElementById('yesButton').addEventListener('click', handleYes);
             document.getElementById('noButton').addEventListener('click', handleNo);
             document.getElementById('resetButton').addEventListener('click', resetScene);
+        }
+
+        // Audio check handlers
+        function handleAudioYes() {
+            audioEnabled = true;
+            document.getElementById('audioCheckContainer').classList.add('hidden');
+            setTimeout(() => {
+                document.getElementById('loveQuestionContainer').classList.remove('hidden');
+            }, 500);
+        }
+
+        function handleAudioNo() {
+            audioEnabled = false;
+            document.getElementById('audioCheckContainer').classList.add('hidden');
+            setTimeout(() => {
+                document.getElementById('audioWarningContainer').classList.remove('hidden');
+            }, 500);
+        }
+
+        function handleAudioOk() {
+            document.getElementById('audioWarningContainer').classList.add('hidden');
+            setTimeout(() => {
+                document.getElementById('loveQuestionContainer').classList.remove('hidden');
+            }, 500);
         }
 
         function createEarth() {
@@ -405,11 +448,14 @@
             isAnimating = true;
             currentMode = 'yes';
             
-            const yesAudio = document.getElementById("yesAudio");
-            yesAudio.volume = 0.5;
-            yesAudio.play();
+            // Only play audio if user confirmed they have it on
+            if (audioEnabled) {
+                const yesAudio = document.getElementById("yesAudio");
+                yesAudio.volume = 0.5;
+                yesAudio.play().catch(e => console.log("Audio play failed:", e));
+            }
             
-            document.getElementById('questionContainer').classList.add('hidden');
+            document.getElementById('loveQuestionContainer').classList.add('hidden');
             
             // Start infinite heart spawning
             startInfiniteHearts();
@@ -430,11 +476,14 @@
             isAnimating = true;
             currentMode = 'no';
             
-            const noAudio = document.getElementById("noAudio");
-            noAudio.volume = 0.5;
-            noAudio.play();
+            // Only play audio if user confirmed they have it on
+            if (audioEnabled) {
+                const noAudio = document.getElementById("noAudio");
+                noAudio.volume = 0.5;
+                noAudio.play().catch(e => console.log("Audio play failed:", e));
+            }
             
-            document.getElementById('questionContainer').classList.add('hidden');
+            document.getElementById('loveQuestionContainer').classList.add('hidden');
             
             // Start infinite sad emoji spawning
             startInfiniteSadEmojis();
@@ -1316,11 +1365,11 @@
             // Reset camera
             camera.position.set(0, 0, 6);
             
-            // Show question again
-            document.getElementById('audioQuestion').classList.remove('hidden');
-            document.getElementById('questionContainer').classList.add('hidden');
-            document.getElementById('audioOffQuestion').classList.add('hidden');
+            // Reset to audio check
+            document.getElementById('loveQuestionContainer').classList.add('hidden');
+            document.getElementById('audioWarningContainer').classList.add('hidden');
             document.getElementById('resetButton').classList.remove('visible');
+            document.getElementById('audioCheckContainer').classList.remove('hidden');
         }
 
         // Handle window resize
